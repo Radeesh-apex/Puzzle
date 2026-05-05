@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber-Race: Team Challenge</title>
+    <style>
+        :root {
+            --alpha-color: #00d4ff;
+            --bravo-color: #ff9d00;
+            --bg: #050505;
+            --panel: #111;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: white;
+            text-align: center;
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+        /* Team Selection Screen */
+        #setup-screen {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .team-btn {
+            padding: 20px 50px;
+            margin: 10px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            border: 2px solid white;
+            background: transparent;
+            color: white;
+            transition: 0.3s;
+            border-radius: 5px;
+        }
+
+        #btn-alpha:hover { background: var(--alpha-color); color: black; box-shadow: 0 0 20px var(--alpha-color); }
+        #btn-bravo:hover { background: var(--bravo-color); color: black; box-shadow: 0 0 20px var(--bravo-color); }
+
+        /* Game UI */
+        #game-ui { display: none; padding: 20px; }
+        
+        .timer-box {
+            font-size: 2rem;
+            font-family: monospace;
+            color: #ff4444;
+            margin: 10px;
+        }
+
+        .puzzle-container {
+            max-width: 500px;
+            margin: 20px auto;
+            background: var(--panel);
+            padding: 30px;
+            border-radius: 15px;
+            border-bottom: 5px solid gray;
+        }
+
+        input {
+            width: 80%;
+            padding: 12px;
+            margin: 20px 0;
+            border-radius: 5px;
+            border: none;
+            font-size: 1.1rem;
+        }
+
+        .hidden { display: none; }
+        
+        .key-reveal {
+            background: #222;
+            padding: 15px;
+            border: 1px dashed #555;
+            margin-top: 10px;
+            font-weight: bold;
+            color: #00ff00;
+        }
+
+        #victory {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .team-indicator { font-weight: bold; text-transform: uppercase; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+    <!-- 1. SETUP SCREEN -->
+    <div id="setup-screen">
+        <h1>SELECT YOUR UNIT</h1>
+        <p>Each team has a unique path to the Master Key.</p>
+        <button class="team-btn" id="btn-alpha" onclick="startGame('Alpha')">TEAM ALPHA</button>
+        <button class="team-btn" id="btn-bravo" onclick="startGame('Bravo')">TEAM BRAVO</button>
+    </div>
+
+    <!-- 2. GAME SCREEN -->
+    <div id="game-ui">
+        <div id="team-tag" class="team-indicator"></div>
+        <div class="timer-box" id="timer">10:00</div>
+
+        <div class="puzzle-container" id="puzzle-box">
+            <h2 id="level-title">Level 1</h2>
+            <p id="puzzle-text">Loading...</p>
+            <input type="text" id="user-input" placeholder="Enter solution...">
+            <button class="team-btn" style="font-size: 1rem;" onclick="checkAnswer()">SUBMIT DATA</button>
+            
+            <div id="key-section" class="hidden">
+                <p>FRAGMENT ACQUIRED:</p>
+                <div class="key-reveal" id="fragment-text"></div>
+                <button class="team-btn" style="font-size: 1rem; border-color: #00ff00;" onclick="nextLevel()">NEXT LEVEL</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. VICTORY SCREEN -->
+    <div id="victory">
+        <h1 style="color: #00ff00; font-size: 4rem;">MISSION COMPLETE</h1>
+        <p>The Master Key has been cracked!</p>
+        <p id="winner-info"></p>
+        <button class="team-btn" onclick="location.reload()">RESTART</button>
+    </div>
+
+<script>
+    let currentTeam = "";
+    let currentLevel = 0;
+    let secondsLeft = 600; // 10 minutes
+    let timerId;
+
+    const puzzles = {
+        Alpha: [
+            { q: "What has keys but can't open locks?", a: "piano", key: "GHOST" },
+            { q: "Solve: (15 x 3) + 5", a: "50", key: "PROTOCOL" },
+            { q: "The more there is, the less you see. What is it?", a: "darkness", key: "X" }
+        ],
+        Bravo: [
+            { q: "I have cities, but no houses. I have mountains, but no trees. What am I?", a: "map", key: "CYBER" },
+            { q: "Solve: (100 / 4) - 10", a: "15", key: "STRIKE" },
+            { q: "What comes once in a minute, twice in a moment, but never in a thousand years?", a: "m", key: "Z" }
+        ]
+    };
+
+    function startGame(team) {
+        currentTeam = team;
+        document.getElementById('setup-screen').style.display = 'none';
+        document.getElementById('game-ui').style.display = 'block';
+        
+        const tag = document.getElementById('team-tag');
+        tag.innerText = "Current Team: " + team;
+        tag.style.color = (team === 'Alpha') ? 'var(--alpha-color)' : 'var(--bravo-color)';
+        
+        loadLevel();
+        startTimer();
+    }
+
+    function startTimer() {
+        timerId = setInterval(() => {
+            secondsLeft--;
+            let mins = Math.floor(secondsLeft / 60);
+            let secs = secondsLeft % 60;
+            document.getElementById('timer').innerText = `${mins}:${secs < 10 ? '0'+secs : secs}`;
+            if (secondsLeft <= 0) {
+                clearInterval(timerId);
+                alert("TIME EXPIRED! ACCESS DENIED.");
+                location.reload();
+            }
+        }, 1000);
+    }
+
+    function loadLevel() {
+        document.getElementById('key-section').classList.add('hidden');
+        document.getElementById('user-input').value = "";
+        document.getElementById('user-input').classList.remove('hidden');
+        
+        if (currentLevel < 3) {
+            document.getElementById('level-title').innerText = `Level ${currentLevel + 1}`;
+            document.getElementById('puzzle-text').innerText = puzzles[currentTeam][currentLevel].q;
+        } else {
+            // Final Master Key Level
+            document.getElementById('level-title').innerText = `FINAL UPLINK`;
+            document.getElementById('puzzle-text').innerText = "Combine all 3 fragments (No Spaces) to win!";
+        }
+    }
+
+    function checkAnswer() {
+        const val = document.getElementById('user-input').value.toLowerCase().trim();
+        
+        if (currentLevel < 3) {
+            if (val === puzzles[currentTeam][currentLevel].a) {
+                showKey(puzzles[currentTeam][currentLevel].key);
+            } else {
+                alert("INCORRECT DATA");
+            }
+        } else {
+            // Check Master Word
+            const master = puzzles[currentTeam].map(p => p.key).join("");
+            if (val.toUpperCase() === master) {
+                winGame();
+            } else {
+                alert("MASTER KEY REJECTED");
+            }
+        }
+    }
+
+    function showKey(key) {
+        document.getElementById('fragment-text').innerText = key;
+        document.getElementById('key-section').classList.remove('hidden');
+        document.getElementById('user-input').classList.add('hidden');
+    }
+
+    function nextLevel() {
+        currentLevel++;
+        loadLevel();
+    }
+
+    function winGame() {
+        clearInterval(timerId);
+        document.getElementById('victory').style.display = 'flex';
+        document.getElementById('winner-info').innerText = `Team ${currentTeam} cracked the code with ${secondsLeft} seconds remaining!`;
+    }
+</script>
+</body>
+</html>
