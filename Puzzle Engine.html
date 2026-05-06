@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Cryptography Challenge</title>
+    <style>
+        :root {
+            --neon-green: #00ff41;
+            --dark-bg: #050505;
+            --panel-bg: #111;
+        }
+
+        body {
+            background-color: var(--dark-bg);
+            color: var(--neon-green);
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            user-select: none; /* Prevents text highlighting */
+        }
+
+        .container {
+            width: 500px;
+            padding: 40px;
+            background: var(--panel-bg);
+            border: 1px solid var(--neon-green);
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.1);
+            text-align: center;
+            border-radius: 5px;
+        }
+
+        h1, h2 { text-transform: uppercase; letter-spacing: 3px; }
+        
+        input {
+            width: 90%;
+            padding: 12px;
+            margin: 15px 0;
+            background: #000;
+            border: 1px solid var(--neon-green);
+            color: var(--neon-green);
+            text-align: center;
+            outline: none;
+            font-size: 1rem;
+        }
+
+        button {
+            width: 95%;
+            padding: 12px;
+            background: var(--neon-green);
+            color: #000;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: 0.3s;
+        }
+
+        button:hover {
+            background: #fff;
+            box-shadow: 0 0 15px #fff;
+        }
+
+        .hidden { display: none; }
+        .error-msg { color: #ff4444; font-size: 0.8rem; height: 20px; }
+        
+        .key-box {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px dashed var(--neon-green);
+            background: rgba(0, 255, 65, 0.05);
+        }
+
+        .progress-bar {
+            font-size: 0.7rem;
+            margin-bottom: 20px;
+            color: #888;
+        }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+
+    <!-- SCREEN 1: LOGIN -->
+    <div id="login-screen" class="container">
+        <h1>System Access</h1>
+        <p>Identify your unit to begin.</p>
+        <input type="text" id="username" placeholder="USERNAME">
+        <input type="password" id="password" placeholder="ACCESS CODE">
+        <div id="login-err" class="error-msg"></div>
+        <button onclick="login()">Initialize Session</button>
+    </div>
+
+    <!-- SCREEN 2: GAMEPLAY -->
+    <div id="game-screen" class="container hidden">
+        <div id="status-bar" class="progress-bar">UNIT: <span id="active-unit"></span> | LEVEL: <span id="active-lv">1</span>/3</div>
+        <h2 id="puzzle-title">Decrypting...</h2>
+        <p id="puzzle-hint" style="color: #ccc;"></p>
+        
+        <div id="input-area">
+            <input type="text" id="user-ans" placeholder="Type solution here..." autocomplete="off">
+            <button onclick="validateAnswer()">Verify Data</button>
+        </div>
+
+        <div id="result-area" class="hidden">
+            <div class="key-box">
+                <p>FRAGMENT FOUND:</p>
+                <h1 id="fragment-text">XXXX</h1>
+            </div>
+            <button id="next-btn" onclick="nextStep()">Proceed to Next Level</button>
+        </div>
+    </div>
+
+    <!-- SCREEN 3: WINNER -->
+    <div id="win-screen" class="container hidden">
+        <h1 style="color: white;">BREACH SUCCESS</h1>
+        <p>All fragments collected. The Master Word is:</p>
+        <h2 id="final-word-display" style="background: var(--neon-green); color: black; padding: 10px;"></h2>
+        <p style="font-size: 0.8rem;">Log this word with your Game Master.</p>
+        <button onclick="location.reload()">Terminal Logout</button>
+    </div>
+
+    <script>
+        /* 
+           SECURITY LAYER: 
+           Passwords and Answers are Base64 encoded.
+           Team Alpha: user 'alpha', pass '1234'
+           Team Bravo: user 'bravo', pass '5678'
+        */
+        const config = {
+            auth: {
+                "alpha": "MTIzNA==", // 1234
+                "bravo": "NTY3OA=="  // 5678
+            },
+            data: {
+                "alpha": [
+                    { q: "Level 1: The Number Code", h: "What is 12 x 12?", a: "MTQ0", k: "ORION" },
+                    { q: "Level 2: Hardware", h: "The 'brain' of the computer (3 letters)", a: "Y3B1", k: "VORTEX" },
+                    { q: "Level 3: Logic", h: "I have keys but no locks. I have space but no room.", a: "a2V5Ym9hcmQ=", k: "NULL" }
+                ],
+                "bravo": [
+                    { q: "Level 1: Geography", h: "Which country has the Eiffel Tower?", a: "ZnJhbmNl", k: "CYBER" },
+                    { q: "Level 2: Math", h: "Result of (50 / 2) + 5", a: "MzA=", k: "PULSE" },
+                    { q: "Level 3: Riddle", h: "What gets wetter as it dries?", a: "dG93ZWw=", k: "LINK" }
+                ]
+            }
+        };
+
+        let currentTeam = "";
+        let currentLv = 0;
+
+        function login() {
+            const u = document.getElementById('username').value.toLowerCase();
+            const p = btoa(document.getElementById('password').value);
+
+            if (config.auth[u] && config.auth[u] === p) {
+                currentTeam = u;
+                showGame();
+            } else {
+                document.getElementById('login-err').innerText = "ACCESS DENIED: INVALID CREDENTIALS";
+            }
+        }
+
+        function showGame() {
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            document.getElementById('active-unit').innerText = currentTeam.toUpperCase();
+            loadLevel();
+        }
+
+        function loadLevel() {
+            const levelData = config.data[currentTeam][currentLv];
+            document.getElementById('active-lv').innerText = currentLv + 1;
+            document.getElementById('puzzle-title').innerText = levelData.q;
+            document.getElementById('puzzle-hint').innerText = levelData.h;
+            
+            document.getElementById('input-area').classList.remove('hidden');
+            document.getElementById('result-area').classList.add('hidden');
+            document.getElementById('user-ans').value = "";
+        }
+
+        function validateAnswer() {
+            const input = btoa(document.getElementById('user-ans').value.toLowerCase().trim());
+            const correct = config.data[currentTeam][currentLv].a;
+
+            if (input === correct) {
+                document.getElementById('input-area').classList.add('hidden');
+                document.getElementById('result-area').classList.remove('hidden');
+                document.getElementById('fragment-text').innerText = config.data[currentTeam][currentLv].k;
+                
+                if (currentLv === 2) {
+                    document.getElementById('next-btn').innerText = "FINAL UPLINK";
+                }
+            } else {
+                alert("❌ DATA CORRUPT: INCORRECT ANSWER");
+            }
+        }
+
+        function nextStep() {
+            currentLv++;
+            if (currentLv < 3) {
+                loadLevel();
+            } else {
+                showWin();
+            }
+        }
+
+        function showWin() {
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('win-screen').classList.remove('hidden');
+            
+            // Combine the keys to show the final master word
+            const finalWord = config.data[currentTeam].map(item => item.k).join("");
+            document.getElementById('final-word-display').innerText = finalWord;
+        }
+
+        // Anti-Cheat: Disable F12, Ctrl+Shift+I, Ctrl+U
+        document.onkeydown = function(e) {
+            if(e.keyCode == 123 || (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 74)) || (e.ctrlKey && e.keyCode == 85)) {
+                alert("SECURITY PROTOCOL: INSPECTOR BLOCKED");
+                return false;
+            }
+        };
+    </script>
+</body>
+</html>
