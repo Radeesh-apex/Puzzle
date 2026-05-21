@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Cryptography Challenge</title>
+    <style>
+        :root {
+            --neon-green: #00ff41;
+            --dark-bg: #050505;
+            --panel-bg: #111;
+        }
+
+        body {
+            background-color: var(--dark-bg);
+            color: var(--neon-green);
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            user-select: none;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 500px;
+            padding: 40px;
+            background: var(--panel-bg);
+            border: 1px solid var(--neon-green);
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.1);
+            text-align: center;
+            border-radius: 5px;
+        }
+
+        h1, h2 { text-transform: uppercase; letter-spacing: 3px; }
+        
+        input {
+            width: 90%;
+            padding: 12px;
+            margin: 15px 0;
+            background: #000;
+            border: 1px solid var(--neon-green);
+            color: var(--neon-green);
+            text-align: center;
+            outline: none;
+            font-size: 1rem;
+        }
+
+        button {
+            width: 95%;
+            padding: 12px;
+            background: var(--neon-green);
+            color: #000;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: 0.3s;
+        }
+
+        button:hover {
+            background: #fff;
+            box-shadow: 0 0 15px #fff;
+        }
+
+        .hidden { display: none !important; }
+        .error-msg { color: #ff4444; font-size: 0.8rem; height: 20px; font-weight: bold; margin-top: 5px; }
+        
+        .key-box {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px dashed var(--neon-green);
+            background: rgba(0, 255, 65, 0.05);
+        }
+
+        .progress-bar {
+            font-size: 0.7rem;
+            margin-bottom: 20px;
+            color: #888;
+        }
+
+        #puzzle-image {
+            max-width: 100%;
+            max-height: 250px;
+            height: auto;
+            margin: 15px 0;
+            border: 1px solid var(--neon-green);
+            border-radius: 4px;
+            display: none;
+        }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen" class="container">
+        <h1>System Access</h1>
+        <p>Identify your unit to begin.</p>
+        <input type="text" id="username" placeholder="USERNAME" autocomplete="off">
+        <input type="password" id="password" placeholder="ACCESS CODE" autocomplete="off">
+        <div id="login-err" class="error-msg"></div>
+        <button onclick="login()">Initialize & Lock Session</button>
+    </div>
+
+    <!-- GAMEPLAY SCREEN -->
+    <div id="game-screen" class="container hidden">
+        <div id="status-bar" class="progress-bar">UNIT: <span id="active-unit"></span> | STATUS: <span id="active-lv"></span></div>
+        <h2 id="puzzle-title">Decrypting...</h2>
+        <p id="puzzle-hint" style="color: #ccc;"></p>
+        <img id="puzzle-image" src="" alt="Puzzle Resource Layout">
+        
+        <div id="input-area">
+            <input type="text" id="user-ans" placeholder="Type solution here..." autocomplete="off">
+            <button onclick="validateAnswer()">Verify Data</button>
+        </div>
+
+        <div id="result-area" class="hidden">
+            <div class="key-box">
+                <p>FRAGMENT FOUND:</p>
+                <h1 id="fragment-text">XXXX</h1>
+            </div>
+            <button id="next-btn" onclick="nextStep()">Proceed</button>
+        </div>
+    </div>
+
+    <!-- WIN SCREEN -->
+    <div id="win-screen" class="container hidden">
+        <h1 style="color: white;">BREACH SUCCESS</h1>
+        <p>System fully decrypted. The Master Word is:</p>
+        <h2 id="final-word-display" style="background: var(--neon-green); color: black; padding: 10px;"></h2>
+        <button onclick="location.reload()">Terminal Logout</button>
+    </div>
+
+    <script>
+        // ==========================================
+        // 🛠️ CONFIGURATION: PASTE YOUR WEB APP URL HERE
+        // ==========================================
+        const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzyFNYS5NctILXocaY0_7Yrwv5IisvLk-KjdV8qviIBAg1LZIy-pLSUJ-mVaC7_e3c/exec";
+
+        let currentTeam = "";
+        let currentLv = 0;
+        let configData = { data: {} }; // Populated dynamically from Google Sheets
+
+        // SECURITY: Prevent tab switching and cheating
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden && currentTeam !== "") {
+                alert("SECURITY VIOLATION: External window access detected.");
+                location.reload();
+            }
+        });
+
+        function enterFullscreen() {
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) elem.requestFullscreen();
+            else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+        }
+
+        // Generates or reads a unique persistent tracking footprint for this browser instance
+        function getOrCreateHardwareId() {
+            let id = localStorage.getItem('device_fingerprint');
+            if (!id) {
+                id = 'dev_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+                localStorage.setItem('device_fingerprint', id);
+            }
+            return id;
+        }
+
+        function login() {
+            const u = document.getElementById('username').value.toLowerCase().trim();
+            const p = document.getElementById('password').value.trim();
+            const errDisplay = document.getElementById('login-err');
+            
+            if (!u || !p) {
+                errDisplay.innerText = "INPUT TIMEOUT: MISSING ENTRIES";
+                return;
+            }
+
+            errDisplay.innerText = "ESTABLISHING MAIN-FRAME SYSTEM LOCK...";
+            const hardwareId = getOrCreateHardwareId();
+
+            // STEP 1: Authenticate and request device locking verification
+            fetch(APPS_SCRIPT_URL, {
+                method: "POST",
+                mode: "cors",
+                body: JSON.stringify({ username: u, password: p, hardwareId: hardwareId })
+            })
+            .then(res => res.json())
+            .then(authResult => {
+                if (authResult.status === "SUCCESS") {
+                    currentTeam = u;
+                    errDisplay.innerText = "ACCESS GRANTED. FETCHING PUZZLE REPOSITORY...";
+                    
+                    // STEP 2: Fetch corresponding levels from Data tab matching team name
+                    return fetch(`${APPS_SCRIPT_URL}?action=getLevels&team=${u}`);
+                } else {
+                    throw new Error(authResult.message);
+                }
+            })
+            .then(res => res.json())
+            .then(levelData => {
+                if (levelData && levelData.length > 0) {
+                    configData.data[currentTeam] = levelData;
+                    enterFullscreen();
+                    showGame();
+                } else {
+                    throw new Error("NO LEVEL TRACK FOUND FOR THIS CONTEXT");
+                }
+            })
+            .catch(err => {
+                errDisplay.innerText = "ACCESS DENIED: " + err.message.toUpperCase();
+            });
+        }
+
+        function showGame() {
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            document.getElementById('active-unit').innerText = currentTeam.toUpperCase();
+            loadLevel();
+        }
+
+        function loadLevel() {
+            const teamData = configData.data[currentTeam];
+            
+            if (currentLv === teamData.length) {
+                setupFinalOverride();
+                return;
+            }
+
+            const levelData = teamData[currentLv];
+            document.getElementById('active-lv').innerText = "LEVEL " + (currentLv + 1) + "/" + teamData.length;
+            document.getElementById('puzzle-title').innerText = levelData.q;
+            document.getElementById('puzzle-hint').innerText = levelData.h;
+            
+            const imgElement = document.getElementById('puzzle-image');
+            if (levelData.img && levelData.img.trim() !== "") {
+                imgElement.src = levelData.img;
+                imgElement.style.display = "inline-block";
+            } else {
+                imgElement.style.display = "none";
+            }
+            
+            document.getElementById('input-area').classList.remove('hidden');
+            document.getElementById('result-area').classList.add('hidden');
+            document.getElementById('user-ans').value = "";
+            document.getElementById('user-ans').placeholder = "Type solution here...";
+        }
+
+        function setupFinalOverride() {
+            document.getElementById('active-lv').innerText = "CORE ACCESS";
+            document.getElementById('puzzle-title').innerText = "TERMINAL OVERRIDE";
+            document.getElementById('puzzle-hint').innerText = "Combine all fragments found in order to breach the mainframe.";
+            document.getElementById('puzzle-image').style.display = "none";
+            document.getElementById('input-area').classList.remove('hidden');
+            document.getElementById('result-area').classList.add('hidden');
+            document.getElementById('user-ans').value = "";
+            document.getElementById('user-ans').placeholder = "ENTER MASTER KEY SEQUENCE";
+        }
+
+        function validateAnswer() {
+            const teamData = configData.data[currentTeam];
+            const rawInput = document.getElementById('user-ans').value.trim().toUpperCase();
+            
+            // Core logic override handling final master validation
+            if (currentLv === teamData.length) {
+                const correctMasterKey = teamData.map(item => item.k).join("").toUpperCase();
+                if (rawInput === correctMasterKey) {
+                    showWin(correctMasterKey);
+                } else {
+                    alert("❌ ACCESS DENIED: INVALID MASTER KEY SEQUENCE");
+                }
+                return;
+            }
+
+            // Standard level runtime validation matching automatically calculated Base64 strings
+            const encodedInput = btoa(rawInput.toLowerCase());
+            const correct = teamData[currentLv].a;
+
+            if (encodedInput === correct) {
+                document.getElementById('input-area').classList.add('hidden');
+                document.getElementById('result-area').classList.remove('hidden');
+                document.getElementById('fragment-text').innerText = teamData[currentLv].k;
+                
+                if (currentLv === teamData.length - 1) {
+                    document.getElementById('next-btn').innerText = "INITIATE FINAL UPLINK";
+                } else {
+                    document.getElementById('next-btn').innerText = "Proceed to Next Level";
+                }
+            } else {
+                alert("❌ DATA CORRUPT: INCORRECT ANSWER");
+            }
+        }
+
+        function nextStep() {
+            currentLv++;
+            loadLevel();
+        }
+
+        function showWin(finalWord) {
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('win-screen').classList.remove('hidden');
+            document.getElementById('final-word-display').innerText = finalWord;
+        }
+
+        // Block internal hardware shortcuts to minimize quick developer tool inspection hacks
+        document.onkeydown = function(e) {
+            if(e.keyCode == 123 || (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 74)) || (e.ctrlKey && e.keyCode == 85)) {
+                return false;
+            }
+        };
+    </script>
+</body>
+</html>
